@@ -518,12 +518,31 @@ def page_challenges():
     st.markdown(f"""
     <div class="hf-page-title">Community Challenges</div>
     <div class="hf-page-sub">
-      Join a challenge, stay accountable, climb the board. 
+      Join a challenge → a habit is auto-created → log it daily in Today → climb the leaderboard.
       <b style="color:{S.ACCENT3};">{len(challenges)}</b> active challenges.
     </div>
     """, unsafe_allow_html=True)
 
-    # Enrolled challenges first
+    # ── How it works banner ──
+    st.markdown(f"""
+    <div style="background:rgba(56,189,248,0.07);border:1px solid rgba(56,189,248,0.2);
+                border-radius:14px;padding:1rem 1.3rem;margin-bottom:1.2rem;
+                display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+      <div style="font-size:1.5rem;">💡</div>
+      <div style="flex:1;">
+        <div style="font-family:'Playfair Display',serif;font-weight:700;
+                    color:{S.TEXT};font-size:0.95rem;margin-bottom:4px;">How challenges work</div>
+        <div style="font-size:0.78rem;color:{S.MUTED};line-height:1.7;">
+          <b style="color:{S.ACCENT3};">1. Join</b> a challenge below →
+          <b style="color:{S.ACCENT3};">2. A habit is auto-added</b> to your Today page →
+          <b style="color:{S.ACCENT3};">3. Tap ✓ Done</b> every day to log it →
+          <b style="color:{S.ACCENT3};">4. Your streak</b> powers the leaderboard.
+          You can also log directly from this page using the <b style="color:{S.ACCENT};">✓ Log Today</b> button.
+        </div>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     my_challenges = [c for c in challenges if c["id"] in enrolled]
     other         = [c for c in challenges if c["id"] not in enrolled]
 
@@ -533,58 +552,100 @@ def page_challenges():
         for c in my_challenges:
             _challenge_card(c, user_id, enrolled=True)
 
-    st.markdown('<div class="hf-section">🌍 All Challenges</div>',
-                unsafe_allow_html=True)
-
-    for c in other:
-        _challenge_card(c, user_id, enrolled=False)
+    if other:
+        st.markdown('<div class="hf-section">🌍 All Challenges</div>',
+                    unsafe_allow_html=True)
+        for c in other:
+            _challenge_card(c, user_id, enrolled=False)
 
 
 def _challenge_card(c: dict, user_id: str, enrolled: bool):
     color        = c.get("color", S.ACCENT3)
     enrolled_cls = "hf-challenge-enrolled" if enrolled else ""
-    lb           = db.challenge_leaderboard(c["id"], top_n=3)
-    top_names    = " · ".join(r["display_name"] for r in lb[:3]) if lb else "—"
-    participants = c.get("participants", 0)
     emoji        = c.get("emoji", "🏆")
     title        = c["title"]
     description  = c["description"]
     duration     = c["duration_days"]
     category     = c["category"]
+    participants = c.get("participants", 0)
 
-    # Pre-compute conditional HTML snippets — never put ternaries inside f-strings
-    enrolled_pill = (
-        '<span class="hf-pill hf-pill-green">✓ Enrolled</span>'
-        if enrolled else ""
-    )
+    # Pre-compute all conditional HTML
+    enrolled_pill = ('<span class="hf-pill hf-pill-green">✓ Enrolled</span>' if enrolled else "")
+
+    if enrolled:
+        prog       = db.challenge_progress(user_id, c["id"])
+        s          = prog["streak"]
+        days_done  = prog["days_done"]
+        pct        = prog["pct"]
+        target     = prog["target"]
+        done_today = db.is_challenge_done_today(user_id, c["id"])
+
+        # Progress bar HTML
+        bar_color  = S.ACCENT2 if done_today else color
+        progress_html = (
+            f'<div style="margin-top:10px;">' 
+            f'<div style="display:flex;justify-content:space-between;margin-bottom:4px;">' 
+            f'<span style="font-size:0.7rem;color:{S.MUTED};">Progress: {days_done}/{target} days</span>' 
+            f'<span style="font-size:0.7rem;font-weight:700;color:{bar_color};">{pct:.0f}%</span>' 
+            f'</div>'
+            f'<div style="background:#1c1c2e;border-radius:99px;height:6px;overflow:hidden;">' 
+            f'<div style="background:{bar_color};width:{pct:.1f}%;height:100%;border-radius:99px;transition:width 0.4s;"></div>' 
+            f'</div>'
+            f'<div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">' 
+            f'<span class="hf-pill hf-pill-gold">🔥 {s}d streak</span>' 
+        )
+        if done_today:
+            progress_html += f'<span class="hf-pill hf-pill-green">✓ Logged today</span>'
+        else:
+            progress_html += f'<span class="hf-pill hf-pill-red">● Not logged yet</span>'
+        progress_html += '</div></div>'
+    else:
+        progress_html = ""
+
+    # Top 3 from leaderboard
+    lb        = db.challenge_leaderboard(c["id"], top_n=3)
+    top_names = " · ".join(r["display_name"] for r in lb[:3]) if lb else "—"
 
     col_c, col_b = st.columns([5, 1])
     with col_c:
         html = (
-            f'<div class="hf-challenge {enrolled_cls}">'
-            f'<div style="position:absolute;top:0;left:0;width:3px;height:100%;'
-            f'background:{color};border-radius:3px 0 0 3px;"></div>'
-            f'<div style="display:flex;align-items:flex-start;gap:12px;padding-left:10px;">'
-            f'<span style="font-size:1.7rem;margin-top:2px;">{emoji}</span>'
-            f'<div style="flex:1;min-width:0;">'
-            f'<div style="font-family:\'Playfair Display\',serif;font-weight:700;'
-            f'font-size:1rem;color:{S.TEXT};">{title}</div>'
-            f'<div style="font-size:0.77rem;color:{S.MUTED};margin-top:3px;line-height:1.5;">'
-            f'{description}</div>'
-            f'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center;">'
-            f'<span class="hf-pill hf-pill-sky">⏱ {duration}d</span>'
-            f'<span class="hf-pill hf-pill-sky">🎯 {category}</span>'
-            f'<span class="hf-pill hf-pill-sky">👥 {participants}</span>'
-            f'{enrolled_pill}'
-            f'</div>'
-            f'<div style="font-size:0.7rem;color:{S.MUTED};margin-top:6px;">'
-            f'🏅 Top: {top_names}</div>'
+            f'<div class="hf-challenge {enrolled_cls}">' 
+            f'<div style="position:absolute;top:0;left:0;width:3px;height:100%;' 
+            f'background:{color};border-radius:3px 0 0 3px;"></div>' 
+            f'<div style="display:flex;align-items:flex-start;gap:12px;padding-left:10px;">' 
+            f'<span style="font-size:1.7rem;margin-top:2px;">{emoji}</span>' 
+            f'<div style="flex:1;min-width:0;">' 
+            f'<div style="font-family:\'Playfair Display\',serif;font-weight:700;' 
+            f'font-size:1rem;color:{S.TEXT};">{title}</div>' 
+            f'<div style="font-size:0.77rem;color:{S.MUTED};margin-top:3px;line-height:1.5;">{description}</div>' 
+            f'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center;">' 
+            f'<span class="hf-pill hf-pill-sky">⏱ {duration}d</span>' 
+            f'<span class="hf-pill hf-pill-sky">🎯 {category}</span>' 
+            f'<span class="hf-pill hf-pill-sky">👥 {participants}</span>' 
+            f'{enrolled_pill}' 
+            f'</div>' 
+            f'{progress_html}' 
+            f'<div style="font-size:0.7rem;color:{S.MUTED};margin-top:6px;">🏅 Top: {top_names}</div>' 
             f'</div></div></div>'
         )
         st.markdown(html, unsafe_allow_html=True)
+
     with col_b:
         if enrolled:
-            st.markdown('<div class="hf-btn-red">', unsafe_allow_html=True)
+            # Log Today button (quick log without going to Today page)
+            done_today_flag = db.is_challenge_done_today(user_id, c["id"])
+            if done_today_flag:
+                st.markdown('<div class="hf-btn-amber">', unsafe_allow_html=True)
+                if st.button("↩ Undo", key=f"ch_undo_{c['id']}"):
+                    db.log_challenge_today(user_id, c["id"]); st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div class="hf-btn-green">', unsafe_allow_html=True)
+                if st.button("✓ Log", key=f"ch_log_{c['id']}"):
+                    db.log_challenge_today(user_id, c["id"]); st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+            # Leave button below
+            st.markdown('<div class="hf-btn-red" style="margin-top:4px;">', unsafe_allow_html=True)
             if st.button("Leave", key=f"leave_{c['id']}"):
                 db.unenroll(user_id, c["id"]); st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
@@ -594,37 +655,56 @@ def _challenge_card(c: dict, user_id: str, enrolled: bool):
                 db.enroll(user_id, c["id"]); st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # Challenge-specific leaderboard inside expander
-    with st.expander(f"📊  {c['title']} Leaderboard"):
-        lb = db.challenge_leaderboard(c["id"], top_n=10)
-        if not lb:
-            st.markdown(f"<span style='color:{S.MUTED};font-size:0.82rem;'>"
-                        "Be the first to join this challenge!</span>",
-                        unsafe_allow_html=True)
+    # Per-challenge leaderboard expander
+    with st.expander(f"📊  {title} Leaderboard"):
+        lb_full = db.challenge_leaderboard(c["id"], top_n=10)
+        if not lb_full:
+            st.markdown(
+                f"<span style='color:{S.MUTED};font-size:0.82rem;'>"
+                "Be the first to join this challenge!</span>",
+                unsafe_allow_html=True
+            )
         else:
-            for i, r in enumerate(lb, 1):
+            # Header
+            st.markdown(
+                f'<div style="display:flex;gap:10px;padding:0.25rem 0.75rem;' 
+                f'font-size:0.62rem;color:{S.MUTED};text-transform:uppercase;' 
+                f'letter-spacing:0.1em;font-family:\'Outfit\',sans-serif;">' 
+                f'<span style="min-width:28px;">#</span>' 
+                f'<span style="flex:1;">Participant</span>' 
+                f'<span style="width:70px;text-align:right;">Streak</span>' 
+                f'<span style="width:60px;text-align:right;">Days</span>' 
+                f'<span style="width:55px;text-align:right;">Done%</span>' 
+                f'</div>',
+                unsafe_allow_html=True
+            )
+            for i, r in enumerate(lb_full, 1):
                 is_me   = r["username"] == st.session_state.user["username"]
                 me_cls  = "hf-lb-me" if is_me else ""
-                you_tag = f'<span style="color:{S.ACCENT};font-size:0.7rem;"> · you</span>' if is_me else ""
-                av_html = avatar(r["display_name"], r["username"], 30)
+                you_tag = f'<span style="color:{S.ACCENT};font-size:0.65rem;"> · you</span>' if is_me else ""
+                av_html = avatar(r["display_name"], r["username"], 28)
                 md_html = medal(i)
                 row = (
-                    f'<div class="hf-lb-row {me_cls}">'
-                    f'<span style="font-size:1.1rem;min-width:28px;text-align:center;">{md_html}</span>'
-                    f'{av_html}'
-                    f'<div style="flex:1;min-width:0;">'
-                    f'<div style="font-weight:600;font-size:0.88rem;color:{S.TEXT};'
-                    f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
-                    f'{r["display_name"]}{you_tag}</div>'
-                    f'<div style="font-size:0.7rem;color:{S.MUTED};">@{r["username"]}</div>'
-                    f'</div>'
-                    f'<div style="text-align:right;">'
-                    f'<div style="font-weight:700;font-size:0.88rem;color:{S.ACCENT};">🔥 {r["best_streak"]}d</div>'
-                    f'<div style="font-size:0.68rem;color:{S.MUTED};">⚡ {r["score"]:,} pts</div>'
+                    f'<div class="hf-lb-row {me_cls}" style="padding:0.5rem 0.75rem;">' 
+                    f'<span style="font-size:1rem;min-width:28px;text-align:center;">{md_html}</span>' 
+                    f'{av_html}' 
+                    f'<div style="flex:1;min-width:0;">' 
+                    f'<div style="font-weight:600;font-size:0.85rem;color:{S.TEXT};' 
+                    f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' 
+                    f'{r["display_name"]}{you_tag}</div>' 
+                    f'<div style="font-size:0.65rem;color:{S.MUTED};">@{r["username"]}</div>' 
+                    f'</div>' 
+                    f'<div style="width:70px;text-align:right;">' 
+                    f'<div style="font-weight:700;font-size:0.85rem;color:{S.ACCENT};">🔥 {r["streak"]}d</div>' 
+                    f'</div>' 
+                    f'<div style="width:60px;text-align:right;">' 
+                    f'<div style="font-size:0.82rem;color:{S.TEXT};font-weight:600;">{r["days_done"]}</div>' 
+                    f'</div>' 
+                    f'<div style="width:55px;text-align:right;">' 
+                    f'<div style="font-size:0.8rem;color:{S.ACCENT3};">{r["pct"]:.0f}%</div>' 
                     f'</div></div>'
                 )
                 st.markdown(row, unsafe_allow_html=True)
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PAGE: GLOBAL LEADERBOARD
