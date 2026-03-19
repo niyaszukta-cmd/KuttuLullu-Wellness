@@ -541,37 +541,47 @@ def page_challenges():
 
 
 def _challenge_card(c: dict, user_id: str, enrolled: bool):
-    color       = c.get("color", S.ACCENT3)
+    color        = c.get("color", S.ACCENT3)
     enrolled_cls = "hf-challenge-enrolled" if enrolled else ""
-    lb          = db.challenge_leaderboard(c["id"], top_n=3)
-    top_names   = " · ".join(r["display_name"] for r in lb[:3]) if lb else "—"
+    lb           = db.challenge_leaderboard(c["id"], top_n=3)
+    top_names    = " · ".join(r["display_name"] for r in lb[:3]) if lb else "—"
     participants = c.get("participants", 0)
+    emoji        = c.get("emoji", "🏆")
+    title        = c["title"]
+    description  = c["description"]
+    duration     = c["duration_days"]
+    category     = c["category"]
+
+    # Pre-compute conditional HTML snippets — never put ternaries inside f-strings
+    enrolled_pill = (
+        '<span class="hf-pill hf-pill-green">✓ Enrolled</span>'
+        if enrolled else ""
+    )
 
     col_c, col_b = st.columns([5, 1])
     with col_c:
-        st.markdown(f"""
-        <div class="hf-challenge {enrolled_cls}">
-          <div style="position:absolute;top:0;left:0;width:3px;height:100%;
-                      background:{color};border-radius:3px 0 0 3px;"></div>
-          <div style="display:flex;align-items:flex-start;gap:12px;padding-left:10px;">
-            <span style="font-size:1.7rem;margin-top:2px;">{c.get("emoji","🏆")}</span>
-            <div style="flex:1;min-width:0;">
-              <div style="font-family:'Playfair Display',serif;font-weight:700;
-                          font-size:1rem;color:{S.TEXT};">{c["title"]}</div>
-              <div style="font-size:0.77rem;color:{S.MUTED};margin-top:3px;line-height:1.5;">
-                {c["description"]}</div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center;">
-                <span class="hf-pill hf-pill-sky">⏱ {c["duration_days"]}d</span>
-                <span class="hf-pill hf-pill-sky">🎯 {c["category"]}</span>
-                <span class="hf-pill hf-pill-sky">👥 {participants}</span>
-                {'<span class="hf-pill hf-pill-green">✓ Enrolled</span>' if enrolled else ''}
-              </div>
-              <div style="font-size:0.7rem;color:{S.MUTED};margin-top:6px;">
-                🏅 Top: {top_names}</div>
-            </div>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
+        html = (
+            f'<div class="hf-challenge {enrolled_cls}">'
+            f'<div style="position:absolute;top:0;left:0;width:3px;height:100%;'
+            f'background:{color};border-radius:3px 0 0 3px;"></div>'
+            f'<div style="display:flex;align-items:flex-start;gap:12px;padding-left:10px;">'
+            f'<span style="font-size:1.7rem;margin-top:2px;">{emoji}</span>'
+            f'<div style="flex:1;min-width:0;">'
+            f'<div style="font-family:\'Playfair Display\',serif;font-weight:700;'
+            f'font-size:1rem;color:{S.TEXT};">{title}</div>'
+            f'<div style="font-size:0.77rem;color:{S.MUTED};margin-top:3px;line-height:1.5;">'
+            f'{description}</div>'
+            f'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center;">'
+            f'<span class="hf-pill hf-pill-sky">⏱ {duration}d</span>'
+            f'<span class="hf-pill hf-pill-sky">🎯 {category}</span>'
+            f'<span class="hf-pill hf-pill-sky">👥 {participants}</span>'
+            f'{enrolled_pill}'
+            f'</div>'
+            f'<div style="font-size:0.7rem;color:{S.MUTED};margin-top:6px;">'
+            f'🏅 Top: {top_names}</div>'
+            f'</div></div></div>'
+        )
+        st.markdown(html, unsafe_allow_html=True)
     with col_b:
         if enrolled:
             st.markdown('<div class="hf-btn-red">', unsafe_allow_html=True)
@@ -593,29 +603,27 @@ def _challenge_card(c: dict, user_id: str, enrolled: bool):
                         unsafe_allow_html=True)
         else:
             for i, r in enumerate(lb, 1):
-                is_me = r["username"] == st.session_state.user["username"]
-                me_cls = "hf-lb-me" if is_me else ""
-                st.markdown(f"""
-                <div class="hf-lb-row {me_cls}">
-                  <span style="font-size:1.1rem;min-width:28px;text-align:center;">
-                    {medal(i)}</span>
-                  {avatar(r['display_name'], r['username'], 30)}
-                  <div style="flex:1;min-width:0;">
-                    <div style="font-weight:600;font-size:0.88rem;color:{S.TEXT};
-                                white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                      {r['display_name']}
-                      {'<span style="color:'+S.ACCENT+';font-size:0.7rem;"> · you</span>' if is_me else ''}
-                    </div>
-                    <div style="font-size:0.7rem;color:{S.MUTED};">@{r['username']}</div>
-                  </div>
-                  <div style="text-align:right;">
-                    <div style="font-weight:700;font-size:0.88rem;color:{S.ACCENT};">
-                      🔥 {r['best_streak']}d</div>
-                    <div style="font-size:0.68rem;color:{S.MUTED};">
-                      ⚡ {r['score']:,} pts</div>
-                  </div>
-                </div>
-                """, unsafe_allow_html=True)
+                is_me   = r["username"] == st.session_state.user["username"]
+                me_cls  = "hf-lb-me" if is_me else ""
+                you_tag = f'<span style="color:{S.ACCENT};font-size:0.7rem;"> · you</span>' if is_me else ""
+                av_html = avatar(r["display_name"], r["username"], 30)
+                md_html = medal(i)
+                row = (
+                    f'<div class="hf-lb-row {me_cls}">'
+                    f'<span style="font-size:1.1rem;min-width:28px;text-align:center;">{md_html}</span>'
+                    f'{av_html}'
+                    f'<div style="flex:1;min-width:0;">'
+                    f'<div style="font-weight:600;font-size:0.88rem;color:{S.TEXT};'
+                    f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+                    f'{r["display_name"]}{you_tag}</div>'
+                    f'<div style="font-size:0.7rem;color:{S.MUTED};">@{r["username"]}</div>'
+                    f'</div>'
+                    f'<div style="text-align:right;">'
+                    f'<div style="font-weight:700;font-size:0.88rem;color:{S.ACCENT};">🔥 {r["best_streak"]}d</div>'
+                    f'<div style="font-size:0.68rem;color:{S.MUTED};">⚡ {r["score"]:,} pts</div>'
+                    f'</div></div>'
+                )
+                st.markdown(row, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -664,31 +672,29 @@ def page_leaderboard():
     """, unsafe_allow_html=True)
 
     for i, r in enumerate(lb, 1):
-        is_me = r["username"] == me
-        me_cls = "hf-lb-me" if is_me else ""
-        st.markdown(f"""
-        <div class="hf-lb-row {me_cls}">
-          <span style="font-size:1.05rem;min-width:28px;text-align:center;">
-            {medal(i)}</span>
-          {avatar(r['display_name'], r['username'], 32)}
-          <div style="flex:1;min-width:0;">
-            <div style="font-weight:600;font-size:0.9rem;color:{S.TEXT};
-                        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-              {r['display_name']}
-              {'<span style="font-size:0.68rem;color:'+S.ACCENT+';"> · you</span>' if is_me else ''}
-            </div>
-            <div style="font-size:0.68rem;color:{S.MUTED};">@{r['username']}</div>
-          </div>
-          <div style="width:80px;text-align:right;">
-            <div style="font-weight:700;font-size:0.88rem;color:{S.ACCENT};">
-              🔥 {r['best_streak']}d</div>
-          </div>
-          <div style="width:80px;text-align:right;">
-            <div style="font-weight:700;font-size:0.88rem;color:{S.ACCENT3};">
-              ⚡ {r['score']:,}</div>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
+        is_me   = r["username"] == me
+        me_cls  = "hf-lb-me" if is_me else ""
+        you_tag = f'<span style="font-size:0.68rem;color:{S.ACCENT};"> · you</span>' if is_me else ""
+        av_html = avatar(r["display_name"], r["username"], 32)
+        md_html = medal(i)
+        row = (
+            f'<div class="hf-lb-row {me_cls}">'
+            f'<span style="font-size:1.05rem;min-width:28px;text-align:center;">{md_html}</span>'
+            f'{av_html}'
+            f'<div style="flex:1;min-width:0;">'
+            f'<div style="font-weight:600;font-size:0.9rem;color:{S.TEXT};'
+            f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+            f'{r["display_name"]}{you_tag}</div>'
+            f'<div style="font-size:0.68rem;color:{S.MUTED};">@{r["username"]}</div>'
+            f'</div>'
+            f'<div style="width:80px;text-align:right;">'
+            f'<div style="font-weight:700;font-size:0.88rem;color:{S.ACCENT};">🔥 {r["best_streak"]}d</div>'
+            f'</div>'
+            f'<div style="width:80px;text-align:right;">'
+            f'<div style="font-weight:700;font-size:0.88rem;color:{S.ACCENT3};">⚡ {r["score"]:,}</div>'
+            f'</div></div>'
+        )
+        st.markdown(row, unsafe_allow_html=True)
 
     st.markdown(f"""
     <div style="text-align:center;margin-top:1rem;font-size:0.72rem;color:{S.MUTED};">
@@ -720,22 +726,27 @@ def page_profile():
         score     = db.user_score(user_id)
         best_s    = db.best_streak_across(user_id)
         all_time  = db.total_completions(user_id)
-        badge_str = S.get_badge(best_s)
-        st.markdown(f"""
-        <div style="font-family:'Outfit',sans-serif;">
-          <div style="font-family:'Playfair Display',serif;font-size:1.5rem;
-                      font-weight:700;color:{S.TEXT};">{user['display_name']}</div>
-          <div style="font-size:0.8rem;color:{S.MUTED};margin-bottom:8px;">
-            @{user['username']} · Member since {user.get('joined','—')}</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;">
-            <span class="hf-pill hf-pill-gold">⚡ {score:,} pts</span>
-            <span class="hf-pill hf-pill-gold">🔥 {best_s}d streak</span>
-            {'<span class="hf-pill hf-pill-gold">'+badge_str+'</span>' if badge_str else ''}
-            <span class="hf-pill hf-pill-sky">{len(habits)} habits</span>
-            <span class="hf-pill hf-pill-green">{all_time} completions</span>
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
+        badge_str  = S.get_badge(best_s)
+        badge_pill = f'<span class="hf-pill hf-pill-gold">{badge_str}</span>' if badge_str else ""
+        disp_name  = user["display_name"]
+        username   = user["username"]
+        joined     = user.get("joined", "—")
+        n_habits   = len(habits)
+        profile_html = (
+            f'<div style="font-family:\'Outfit\',sans-serif;">'
+            f'<div style="font-family:\'Playfair Display\',serif;font-size:1.5rem;'
+            f'font-weight:700;color:{S.TEXT};">{disp_name}</div>'
+            f'<div style="font-size:0.8rem;color:{S.MUTED};margin-bottom:8px;">'
+            f'@{username} · Member since {joined}</div>'
+            f'<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+            f'<span class="hf-pill hf-pill-gold">⚡ {score:,} pts</span>'
+            f'<span class="hf-pill hf-pill-gold">🔥 {best_s}d streak</span>'
+            f'{badge_pill}'
+            f'<span class="hf-pill hf-pill-sky">{n_habits} habits</span>'
+            f'<span class="hf-pill hf-pill-green">{all_time} completions</span>'
+            f'</div></div>'
+        )
+        st.markdown(profile_html, unsafe_allow_html=True)
 
     st.markdown("<br>", unsafe_allow_html=True)
 
